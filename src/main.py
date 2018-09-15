@@ -190,7 +190,11 @@ class Solution:
         #self.y_train = np.expand_dims(self.y_train, -1)
         print('x shape:', self.x_train.shape)
         print('y shape:', self.y_train.shape)
-        """
+
+    def read_imdb_data(self):
+
+        classes = 2
+        self.classes = classes
         (X_train, y_train), (X_test, y_test) = imdb.load_data(path='imdb.npz', num_words=None, skip_top=0, maxlen=None,
                                                               seed=113, start_char=0, oov_char=1, index_from=2)
         self.feature_len = 0
@@ -217,11 +221,11 @@ class Solution:
             tmp[y_test[i]] = 1
             self.ytest.append(tmp[:])
         self.ytrain = np.array(self.ytrain)
-        self.xtrain = np.concatenate((self.xtrain, self.xtest), axis=0)
-        self.ytrain = np.concatenate((self.ytrain, self.ytest), axis=0)
-        print(self.xtrain.shape)
-        print(self.ytrain.shape)
-        """
+        self.x_train = np.concatenate((self.xtrain, self.xtest), axis=0)
+        self.y_train = np.concatenate((self.ytrain, self.ytest), axis=0)
+        print('x train data shape:', self.x_train.shape)
+        print('y train data shape:', self.y_train.shape)
+
 
     def model(self):
         model = Sequential()
@@ -247,7 +251,7 @@ class Solution:
         vector_input = Input(shape=(self.feature_len,), dtype='int32', name='vector_input')
         embedding = Embedding(self.vocab_size, output_dim=64)(vector_input)
         lstm = Bidirectional(LSTM(256, return_sequences=False), merge_mode='concat')(embedding)
-        dropout1 = Dropout(0.5)(lstm)
+        #dropout1 = Dropout(0.5)(lstm)
         #lstm1 = Bidirectional(LSTM(1024, kernel_regularizer=regularizers.l2(0.01)))(dropout1)
         # lstm = LSTM(1024)(embedding)
         dropout = Dropout(0.5)(lstm)
@@ -255,7 +259,7 @@ class Solution:
         output = Dense(self.classes, kernel_regularizer=regularizers.l2(0.01), activation='softmax')(dropout)
         parallel_model = Model(inputs=vector_input, outputs=output)
         # print(parallel_model.predict(self.xtrain[:10]).shape)
-        #parallel_model = multi_gpu_model(parallel_model, gpus=2)
+        parallel_model = multi_gpu_model(parallel_model, gpus=2)
         # parallel_model = multi_gpu_model(parallel_model, gpus=4)
         # parallel_model.compile(loss='categorical_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
         parallel_model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
@@ -265,7 +269,7 @@ class Solution:
         #print(self.x_train[0:1,:])
         #out = parallel_model.predict(self.x_train[0:1,:])
         #print(out.shape)
-        parallel_model.fit(self.x_train, self.y_train, batch_size=32, epochs=50, validation_split=0.1, callbacks=self.clkb, verbose=1)
+        parallel_model.fit(self.x_train, self.y_train, batch_size=64, epochs=50, validation_split=0.1, callbacks=self.clkb, verbose=1)
         # parallel_model.fit(self.xtrain, self.ytrain, batch_size=512, epochs=30, validation_split=0.2, callbacks=self.clkb, verbose=1)
         score = parallel_model.evaluate(self.x_train, self.y_train, batch_size=32)
         print(score)
@@ -278,11 +282,14 @@ class Solution:
 def run():
     pro = Process()
     s = Solution()
+    """
     train_data = pro.readFile('../data/train.tsv')
     test_data = pro.readFile('../data/test.tsv')
     data = s.convert_data(train_data)
     #print(data[0])
     s.read_data(data)
+    """
+    s.read_imdb_data()
     s.run()
 
 
