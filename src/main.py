@@ -24,6 +24,7 @@ from keras.preprocessing import text
 from keras.utils import multi_gpu_model
 import tensorflow as tf
 from keras.callbacks import EarlyStopping, TensorBoard, Callback
+from keras.utils.np_utils import to_categorical
 from keras.backend.tensorflow_backend import set_session
 import numpy as np
 
@@ -37,6 +38,8 @@ class TrainVaildTensorBoard(TensorBoard):
         self.batch_count = -1
         self.t_loss = 0.0
         self.t_acc = 0.0
+        self.count = 0
+        self.log_epoch = 10
 
     def set_model(self, model):
         self.val_writer = tf.summary.FileWriter(self.val_log_dir)
@@ -48,14 +51,16 @@ class TrainVaildTensorBoard(TensorBoard):
         logs = logs or {}
         print('\n', logs)
         val_logs = {k.replace('val_', ''): v for k, v in logs.items() if k.startswith('val_')}
-        self.batch_count += 1
+        #self.batch_count += 1
+        #print('batch_count:', self.batch_count)
         for name, value in val_logs.items():
             summary = tf.Summary()
             summary_value = summary.value.add()
             summary_value.simple_value = value.item()
             summary_value.tag = name
             if 'loss' in name:
-                self.val_writer.add_summary(summary, self.batch_count)
+                pass
+                #self.val_writer.add_summary(summary, self.batch_count)
             else:
                 self.val_writer.add_summary(summary, epoch)
         self.val_writer.flush()
@@ -67,7 +72,8 @@ class TrainVaildTensorBoard(TensorBoard):
             summary_value.simple_value = value.item()
             summary_value.tag = name
             if 'loss' in name:
-                self.train_writer.add_summary(summary, self.batch_count)
+                pass
+                #self.train_writer.add_summary(summary, self.batch_count)
             else:
                 self.train_writer.add_summary(summary, epoch)
         self.train_writer.flush()
@@ -79,14 +85,16 @@ class TrainVaildTensorBoard(TensorBoard):
             batch = logs['batch']
             loss = logs['loss']
             acc = logs['acc']
-            if batch % 10 == 0 and batch != 0:
-                t_loss = self.t_loss / 10.0
-                t_acc = self.t_acc / 10.0
+            #print('batch: ', batch)
+            self.count += 1
+            if self.count % self.log_epoch == 0 and self.count != 0:
+                t_loss = self.t_loss / float(self.count)
+                t_acc = self.t_acc / float(self.count)
                 self.t_loss = 0.0
                 self.t_acc = 0.0
+                self.count = 0
                 self.batch_count += 1
 
-                """
                 y_pred = tf.convert_to_tensor(self.model.predict(val_data[0]), np.float32)
                 y_true = tf.convert_to_tensor(val_data[1], np.float32)
                 val_loss = K.categorical_crossentropy(y_true, y_pred)
@@ -94,6 +102,8 @@ class TrainVaildTensorBoard(TensorBoard):
                 loss_list = self.sess.run(val_loss)
                 val_loss = np.sum(loss_list) / len(loss_list)
                 print(' - val_loss', val_loss)
+                #print('batch :', str(self.batch_count) + ' ' + str(t_loss) + ' ' + str(val_loss))
+                #print('--------')
                 summary = tf.Summary()
                 summary_value = summary.value.add()
                 summary_value.simple_value = val_loss
@@ -101,7 +111,6 @@ class TrainVaildTensorBoard(TensorBoard):
                 self.val_writer.add_summary(summary, self.batch_count)
                 self.val_writer.flush()
                 #batch_logs = {'loss':t_loss, 'acc':t_acc}
-                """
                 batch_logs = {'loss': t_loss}
 
                 for name, value in batch_logs.items():
@@ -139,6 +148,7 @@ class Solution:
         # tb_sb = TrainValidTensorBoardCallback()
         # self.clkb = [es, tb_cb]
         self.clkb = [tb_cb]
+        #self.clkb = [TensorBoard()]
 
     def convert_data(self, train_data):
 
@@ -151,15 +161,35 @@ class Solution:
         token = text.Tokenizer(lower=True, split=" ", char_level=False)
         token.fit_on_texts(train_text)
         process_train_data = token.texts_to_sequences(train_text)
-        for i in range(train_data):
-            process_train_data[i] = (process_train_data[i], train_data[i][0])
+        for i in range(train_num):
+            process_train_data[i] = (process_train_data[i], train_data[i][1])
 
+        self.vocab_size = len(token.word_counts) + 1
         return process_train_data
 
-    def read_data(self):
+    def read_data(self, data):
 
-        classes = 5
+        self.classes = 5
+        self.feature_len = 0
+        x_train = []
+        y_train = []
 
+        for i in range(len(data)):
+            self.feature_len = max(self.feature_len, len(data[i][0]))
+            x_train.append(np.array(data[i][0]))
+            y_train.append(data[i][1])
+        print('feature length:', self.feature_len)
+        print('vocab size:', self.vocab_size)
+
+        self.x_train = np.array(x_train)
+        self.x_train = pad_sequences(x_train, maxlen=self.feature_len, padding='post')
+        #print(y_train)
+        self.y_train = np.array(y_train, dtype='int32')
+        self.y_train = to_categorical(self.y_train, num_classes=self.classes)
+        #print(self.y_train)
+        #self.y_train = np.expand_dims(self.y_train, -1)
+        print('x shape:', self.x_train.shape)
+        print('y shape:', self.y_train.shape)
         """
         (X_train, y_train), (X_test, y_test) = imdb.load_data(path='imdb.npz', num_words=None, skip_top=0, maxlen=None,
                                                               seed=113, start_char=0, oov_char=1, index_from=2)
@@ -214,28 +244,30 @@ class Solution:
         print(score)
 
     def function_model(self):
-        vector_input = Input(shape=(200,), dtype='int32', name='vector_input')
+        vector_input = Input(shape=(self.feature_len,), dtype='int32', name='vector_input')
         embedding = Embedding(self.vocab_size, output_dim=64)(vector_input)
-        lstm = Bidirectional(LSTM(256, return_sequences=True), merge_mode='concat')(embedding)
+        lstm = Bidirectional(LSTM(256, return_sequences=False), merge_mode='concat')(embedding)
         dropout1 = Dropout(0.5)(lstm)
-        lstm1 = Bidirectional(LSTM(1024, kernel_regularizer=regularizers.l2(0.01)))(dropout1)
+        #lstm1 = Bidirectional(LSTM(1024, kernel_regularizer=regularizers.l2(0.01)))(dropout1)
         # lstm = LSTM(1024)(embedding)
-        dropout = Dropout(0.5)(lstm1)
-        # dropout = Flatten()(dropout)
-        output = Dense(2, kernel_regularizer=regularizers.l2(0.01), activation='softmax')(dropout)
+        dropout = Dropout(0.5)(lstm)
+        #dropout = Flatten()(dropout)
+        output = Dense(self.classes, kernel_regularizer=regularizers.l2(0.01), activation='softmax')(dropout)
         parallel_model = Model(inputs=vector_input, outputs=output)
         # print(parallel_model.predict(self.xtrain[:10]).shape)
-        parallel_model = multi_gpu_model(parallel_model, gpus=2)
+        #parallel_model = multi_gpu_model(parallel_model, gpus=2)
         # parallel_model = multi_gpu_model(parallel_model, gpus=4)
         # parallel_model.compile(loss='categorical_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
         parallel_model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
         # parallel_model.fit(self.xtrain, self.ytrain, batch_size=128, epochs=20, validation_data=(self.xtest, self.ytest), callbacks=self.clkb, verbose=1)
         # parallel_model.fit(self.xtrain, self.ytrain, batch_size=256, epochs=10, validation_data=(self.xtest, self.ytest), callbacks=self.clkb)
-        parallel_model.fit(self.xtrain, self.ytrain, batch_size=256, epochs=50, validation_split=0.01,
-                           callbacks=self.clkb, verbose=1)
+        #print(self.x_train[0:1,:])
+        #out = parallel_model.predict(self.x_train[0:1,:])
+        #print(out.shape)
+        parallel_model.fit(self.x_train, self.y_train, batch_size=32, epochs=50, validation_split=0.1, callbacks=self.clkb, verbose=1)
         # parallel_model.fit(self.xtrain, self.ytrain, batch_size=512, epochs=30, validation_split=0.2, callbacks=self.clkb, verbose=1)
-        score = parallel_model.evaluate(self.xtrain[25000:], self.ytrain[25000:], batch_size=32)
+        score = parallel_model.evaluate(self.x_train, self.y_train, batch_size=32)
         print(score)
 
     def run(self):
@@ -248,7 +280,10 @@ def run():
     s = Solution()
     train_data = pro.readFile('../data/train.tsv')
     test_data = pro.readFile('../data/test.tsv')
-    s.convert_data(train_data)
+    data = s.convert_data(train_data)
+    #print(data[0])
+    s.read_data(data)
+    s.run()
 
 
 if __name__ == "__main__":
