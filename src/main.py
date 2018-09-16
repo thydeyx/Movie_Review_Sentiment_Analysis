@@ -202,7 +202,7 @@ class Solution:
         for i in range(len(X_train)):
             self.feature_len = max(self.feature_len, len(X_train[i]))
             self.vocab_size = max(self.vocab_size, max(X_train[i]))
-        self.feature_len = 200
+        self.feature_len = min(self.feature_len, 200)
         print('feature length:', self.feature_len)
         print('vocab size:', self.vocab_size)
 
@@ -221,8 +221,8 @@ class Solution:
             tmp[y_test[i]] = 1
             self.ytest.append(tmp[:])
         self.ytrain = np.array(self.ytrain)
-        self.x_train = np.concatenate((self.xtrain, self.xtest), axis=0)
-        self.y_train = np.concatenate((self.ytrain, self.ytest), axis=0)
+        self.x_train = np.concatenate((self.xtrain, self.xtest), axis=0)[:10000,:]
+        self.y_train = np.concatenate((self.ytrain, self.ytest), axis=0)[:10000,:]
         print('x train data shape:', self.x_train.shape)
         print('y train data shape:', self.y_train.shape)
 
@@ -249,8 +249,8 @@ class Solution:
 
     def function_model(self):
         vector_input = Input(shape=(self.feature_len,), dtype='int32', name='vector_input')
-        embedding = Embedding(self.vocab_size, output_dim=64)(vector_input)
-        lstm = Bidirectional(LSTM(256, return_sequences=False), merge_mode='concat')(embedding)
+        embedding = Embedding(self.vocab_size, output_dim=32)(vector_input)
+        lstm = Bidirectional(LSTM(128, return_sequences=False), merge_mode='concat')(embedding)
         #dropout1 = Dropout(0.5)(lstm)
         #lstm1 = Bidirectional(LSTM(1024, kernel_regularizer=regularizers.l2(0.01)))(dropout1)
         # lstm = LSTM(1024)(embedding)
@@ -259,7 +259,7 @@ class Solution:
         output = Dense(self.classes, kernel_regularizer=regularizers.l2(0.01), activation='softmax')(dropout)
         parallel_model = Model(inputs=vector_input, outputs=output)
         # print(parallel_model.predict(self.xtrain[:10]).shape)
-        parallel_model = multi_gpu_model(parallel_model, gpus=2)
+        # parallel_model = multi_gpu_model(parallel_model, gpus=2)
         # parallel_model = multi_gpu_model(parallel_model, gpus=4)
         # parallel_model.compile(loss='categorical_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
         parallel_model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
