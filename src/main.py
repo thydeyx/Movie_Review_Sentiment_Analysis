@@ -8,6 +8,7 @@
 #          Desc :
 
 from process import Process
+from TextCNN import TextCNN
 
 import keras
 import os
@@ -282,6 +283,10 @@ class Solution:
 def run():
     pro = Process()
     s = Solution()
+    s.read_imdb_data()
+    model = TextCNN(sentence_length=s.feature_len, vocab_size=s.vocab_size, filter_size="3,4,5", embedding_size=128,
+                    conv_filter_size=128, classes=s.classes)
+    model.train(s.x_train, s.y_train)
     """
     train_data = pro.readFile('../data/train.tsv')
     test_data = pro.readFile('../data/test.tsv')
@@ -289,8 +294,11 @@ def run():
     #print(data[0])
     s.read_data(data)
     """
+
+    """
     s.read_imdb_data()
     s.run()
+    """
 
 
 if __name__ == "__main__":
