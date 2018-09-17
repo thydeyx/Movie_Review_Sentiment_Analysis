@@ -4,15 +4,17 @@ import keras
 from keras.initializers import RandomNormal, Constant
 from keras.layers import Embedding, Input
 from keras.layers import Conv2D, MaxPooling2D, Dense
-from keras.layers import Concatenate, Flatten, Reshape
+from keras.layers import Concatenate, Flatten, Reshape, Average, average
 from keras.models import Model
 from keras.utils import multi_gpu_model
 from keras.callbacks import EarlyStopping, TensorBoard
+from keras.losses import binary_crossentropy
 from keras.backend.tensorflow_backend import set_session
 import keras.backend as K
 import tensorflow as tf
 import numpy as np
 import os
+
 
 class TrainVaildTensorBoard(TensorBoard):
 
@@ -84,20 +86,23 @@ class TrainVaildTensorBoard(TensorBoard):
                 y_pred = tf.convert_to_tensor(self.model.predict(val_data[0]), np.float32)
                 y_true = tf.convert_to_tensor(val_data[1], np.float32)
                 #val_loss = K.categorical_crossentropy(y_true, y_pred)
-                val_loss = K.binary_crossentropy(y_true, y_pred)
+                #val_loss = K.mean(K.binary_crossentropy(y_true, y_pred), axis=-1)
+                val_loss = binary_crossentropy(y_true, y_pred)
                 test_num = 5
-                print('Y predict:', self.sess.run(y_pred[:test_num]))
-                print('Y true:', self.sess.run(y_true[:test_num]))
-                print('val loss:', self.sess.run(val_loss[:test_num]))
+                #print('Y predict:', self.sess.run(y_pred[:test_num]))
+                #print('Y true:', self.sess.run(y_true[:test_num]))
+                #print('val loss:', val_loss)
                 #print(np.asarray(val_loss, np.float32))
-                loss_list = self.sess.run(val_loss)
-                val_loss = np.sum(loss_list) / len(loss_list)
-                print(' - val_loss', val_loss)
+                #loss_list = self.sess.run(val_loss)
+                #print('loss list: ', loss_list[:test_num])
+                #val_loss = np.sum(loss_list) / len(loss_list)
+                val_loss_avg = K.mean(val_loss, axis=-1)
+                print(' - val_loss', K.get_value(val_loss_avg))
                 #print('batch :', str(self.batch_count) + ' ' + str(t_loss) + ' ' + str(val_loss))
                 #print('--------')
                 summary = tf.Summary()
                 summary_value = summary.value.add()
-                summary_value.simple_value = val_loss
+                summary_value.simple_value = K.get_value(val_loss_avg)
                 summary_value.tag = 'loss'
                 self.val_writer.add_summary(summary, self.batch_count)
                 self.val_writer.flush()
@@ -178,7 +183,7 @@ class TextCNN(object):
         self.x_train = x_train
         self.y_train = y_train
         parallel_model = self.model()
-        #parallel_model = multi_gpu_model(parallel_model, gpus=2)
+        parallel_model = multi_gpu_model(parallel_model, gpus=2)
         parallel_model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
         parallel_model.fit(self.x_train, self.y_train, batch_size=self.batch_size, epochs=50, validation_split=0.1,
                            callbacks=self.clkb, verbose=1)
