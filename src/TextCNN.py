@@ -83,7 +83,12 @@ class TrainVaildTensorBoard(TensorBoard):
 
                 y_pred = tf.convert_to_tensor(self.model.predict(val_data[0]), np.float32)
                 y_true = tf.convert_to_tensor(val_data[1], np.float32)
-                val_loss = K.categorical_crossentropy(y_true, y_pred)
+                #val_loss = K.categorical_crossentropy(y_true, y_pred)
+                val_loss = K.binary_crossentropy(y_true, y_pred)
+                test_num = 5
+                print('Y predict:', self.sess.run(y_pred[:test_num]))
+                print('Y true:', self.sess.run(y_true[:test_num]))
+                print('val loss:', self.sess.run(val_loss[:test_num]))
                 #print(np.asarray(val_loss, np.float32))
                 loss_list = self.sess.run(val_loss)
                 val_loss = np.sum(loss_list) / len(loss_list)
