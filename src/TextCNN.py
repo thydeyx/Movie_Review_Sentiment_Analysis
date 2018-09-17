@@ -73,7 +73,8 @@ class TrainVaildTensorBoard(TensorBoard):
             #print('batch: ', batch)
             self.count += 1
             if self.count % self.log_epoch == 0 and self.count != 0:
-                t_loss = self.t_loss / float(self.count)
+                #t_loss = self.t_loss / float(self.count)
+                t_loss = loss
                 t_acc = self.t_acc / float(self.count)
                 self.t_loss = 0.0
                 self.t_acc = 0.0
@@ -161,7 +162,7 @@ class TextCNN(object):
         #flatten = Flatten(data_format='channels_last')(pooled)
         pool_flat = Reshape(target_shape=(num_filters_total, ))(pooled)
         #print(pool_flat)
-        output = Dense(self.classes, activation='linear', use_bias=True, bias_initializer= Constant(value=0.1),
+        output = Dense(self.classes, activation='softmax', use_bias=True, bias_initializer= Constant(value=0.1),
                        kernel_initializer=RandomNormal(mean=0.0, stddev=1.0, seed=None))(pool_flat)
         #print(output)
         return Model(inputs=vector_input, outputs=output)
@@ -173,6 +174,6 @@ class TextCNN(object):
         self.y_train = y_train
         parallel_model = self.model()
         #parallel_model = multi_gpu_model(parallel_model, gpus=2)
-        parallel_model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+        parallel_model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
         parallel_model.fit(self.x_train, self.y_train, batch_size=self.batch_size, epochs=50, validation_split=0.1,
                            callbacks=self.clkb, verbose=1)
